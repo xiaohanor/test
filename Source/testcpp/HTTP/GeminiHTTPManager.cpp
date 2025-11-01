@@ -17,7 +17,7 @@ void UGeminiHTTPManager::GenerateContent(const FString& UserPrompt, const FGemin
 {
 	if (!APIData)
 	{
-		UE_LOG(LogTemp, Error, TEXT("GeminiHTTPManager not initialized: APIData is null"));
+		UE_LOG(LogTemp, Error, TEXT("[GeminiHTTP] Not initialized: APIData is null"));
 		OnDone.ExecuteIfBound(false, TEXT("{""error"": ""No APIData""}"));
 		return;
 	}
@@ -33,9 +33,13 @@ void UGeminiHTTPManager::GenerateContent(const FString& UserPrompt, const FGemin
 	FString Payload;
 	if (!BuildGeneratePayload(UserPrompt, Config, Payload))
 	{
+		UE_LOG(LogTemp, Error, TEXT("[GeminiHTTP] Failed to build request payload"));
 		OnDone.ExecuteIfBound(false, TEXT("{""error"": ""Failed to build payload""}"));
 		return;
 	}
+
+	UE_LOG(LogTemp, Log, TEXT("[GeminiHTTP] Request URL: %s"), *Url);
+	UE_LOG(LogTemp, Log, TEXT("[GeminiHTTP] Request Payload: %s"), *Payload);
 
 	FHttpModule& Http = FHttpModule::Get();
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Http.CreateRequest();
@@ -64,12 +68,14 @@ bool UGeminiHTTPManager::TryExtractTextFromResponse(const FString& Json, FString
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Json);
 	if (!FJsonSerializer::Deserialize(Reader, RootObj) || !RootObj.IsValid())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiHTTP] TryExtractText: Failed to parse JSON"));
 		return false;
 	}
 
 	const TArray<TSharedPtr<FJsonValue>>* CandidatesArr = nullptr;
 	if (!RootObj->TryGetArrayField(TEXT("candidates"), CandidatesArr) || CandidatesArr == nullptr || CandidatesArr->Num() == 0)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiHTTP] TryExtractText: No candidates found"));
 		return false;
 	}
 
@@ -77,6 +83,7 @@ bool UGeminiHTTPManager::TryExtractTextFromResponse(const FString& Json, FString
 	const TSharedPtr<FJsonObject>* CandidateObjPtr = nullptr;
 	if (!(*CandidatesArr)[0]->TryGetObject(CandidateObjPtr) || CandidateObjPtr == nullptr)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiHTTP] TryExtractText: First candidate invalid"));
 		return false;
 	}
 	const FJsonObject& CandidateObj = *CandidateObjPtr->Get();
@@ -84,6 +91,7 @@ bool UGeminiHTTPManager::TryExtractTextFromResponse(const FString& Json, FString
 	const TSharedPtr<FJsonObject>* ContentObjPtr = nullptr;
 	if (!CandidateObj.TryGetObjectField(TEXT("content"), ContentObjPtr) || ContentObjPtr == nullptr)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiHTTP] TryExtractText: No content field"));
 		return false;
 	}
 	const FJsonObject& ContentObj = *ContentObjPtr->Get();
@@ -91,6 +99,7 @@ bool UGeminiHTTPManager::TryExtractTextFromResponse(const FString& Json, FString
 	const TArray<TSharedPtr<FJsonValue>>* PartsArr = nullptr;
 	if (!ContentObj.TryGetArrayField(TEXT("parts"), PartsArr) || PartsArr == nullptr)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiHTTP] TryExtractText: No parts array"));
 		return false;
 	}
 
@@ -110,6 +119,10 @@ bool UGeminiHTTPManager::TryExtractTextFromResponse(const FString& Json, FString
 	}
 
 	OutText = Accum;
+	if (!OutText.IsEmpty())
+	{
+		UE_LOG(LogTemp, Log, TEXT("[GeminiHTTP] Extracted text: %s"), *OutText);
+	}
 	return !OutText.IsEmpty();
 }
 
@@ -242,6 +255,7 @@ void UGeminiHTTPManager::HandleResponse(TSharedPtr<IHttpRequest, ESPMode::Thread
 {
 	if (!bWasSuccessful || !Response.IsValid())
 	{
+		UE_LOG(LogTemp, Error, TEXT("[GeminiHTTP] Request failed or no response received"));
 		Callback.ExecuteIfBound(false, TEXT("{""error"": ""No response""}"));
 		return;
 	}
@@ -249,5 +263,15 @@ void UGeminiHTTPManager::HandleResponse(TSharedPtr<IHttpRequest, ESPMode::Thread
 	const int32 Code = Response->GetResponseCode();
 	const FString Body = Response->GetContentAsString();
 	const bool bOk = Code >= 200 && Code < 300;
+	
+	if (bOk)
+	{
+		UE_LOG(LogTemp, Log, TEXT("[GeminiHTTP] Response (Code %d): %s"), Code, *Body);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("[GeminiHTTP] Error Response (Code %d): %s"), Code, *Body);
+	}
+	
 	Callback.ExecuteIfBound(bOk, Body);
 }
