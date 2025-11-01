@@ -6,6 +6,13 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 
+// Validation constants
+namespace LLMActionConstants
+{
+	static constexpr float MinConfidenceThreshold = 0.5f;
+	static constexpr int32 MaxSpeakTextLength = 500;
+}
+
 bool ULLMActionParser::ParseAction(const FString& JsonText, FLLMAction& OutAction)
 {
 	OutAction = FLLMAction(); // Reset to defaults
@@ -105,9 +112,10 @@ bool ULLMActionParser::ValidateAction(const FLLMAction& Action, FString& OutErro
 	}
 
 	// Check confidence threshold (hardcoded to 0.5 for MVP)
-	if (Action.Confidence < 0.5f)
+	if (Action.Confidence < LLMActionConstants::MinConfidenceThreshold)
 	{
-		OutErrorMessage = FString::Printf(TEXT("Confidence %.2f below threshold 0.5"), Action.Confidence);
+		OutErrorMessage = FString::Printf(TEXT("Confidence %.2f below threshold %.2f"), 
+			Action.Confidence, LLMActionConstants::MinConfidenceThreshold);
 		UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
 		return false;
 	}
@@ -117,12 +125,8 @@ bool ULLMActionParser::ValidateAction(const FLLMAction& Action, FString& OutErro
 	{
 		if (Action.Location.bUseCoordinates)
 		{
-			if (Action.Location.Coordinates.IsNearlyZero())
-			{
-				OutErrorMessage = TEXT("MoveTo requires non-zero coordinates");
-				UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
-				return false;
-			}
+			// Note: We don't validate against zero as (0,0,0) could be a valid world location
+			// In production, consider validating against world bounds or NavMesh
 		}
 		else
 		{
@@ -157,10 +161,11 @@ bool ULLMActionParser::ValidateAction(const FLLMAction& Action, FString& OutErro
 			UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
 			return false;
 		}
-		// MVP: limit speak length to 500 characters
-		if (Action.Speak.Len() > 500)
+		// MVP: limit speak length to configured maximum
+		if (Action.Speak.Len() > LLMActionConstants::MaxSpeakTextLength)
 		{
-			OutErrorMessage = TEXT("Speak text exceeds 500 character limit");
+			OutErrorMessage = FString::Printf(TEXT("Speak text exceeds %d character limit"), 
+				LLMActionConstants::MaxSpeakTextLength);
 			UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
 			return false;
 		}

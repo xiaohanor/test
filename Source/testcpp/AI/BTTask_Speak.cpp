@@ -41,7 +41,7 @@ EBTNodeResult::Type UBTTask_Speak::ExecuteTask(UBehaviorTreeComponent& OwnerComp
 
 	// MVP implementation: Log the speech
 	// In a full implementation, you would:
-	// 1. Display subtitles on screen
+	// 1. Display subtitles on screen via proper UI system
 	// 2. Play voice audio
 	// 3. Trigger speech animations
 	// 4. Wait for DisplayDuration before completing
@@ -49,7 +49,8 @@ EBTNodeResult::Type UBTTask_Speak::ExecuteTask(UBehaviorTreeComponent& OwnerComp
 	FString PawnName = ControlledPawn ? ControlledPawn->GetName() : TEXT("Unknown");
 	UE_LOG(LogTemp, Log, TEXT("[BTTask_Speak] %s says: \"%s\""), *PawnName, *SpeakText);
 	
-	// For MVP, we'll use on-screen debug message as well
+	// For MVP, we'll use on-screen debug message as visual feedback
+	// TODO: Replace with proper UI widget or subtitle system for production
 	if (GEngine)
 	{
 		FString DisplayText = FString::Printf(TEXT("%s: %s"), *PawnName, *SpeakText);

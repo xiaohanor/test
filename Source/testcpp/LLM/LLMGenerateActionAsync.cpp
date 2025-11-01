@@ -13,7 +13,7 @@ ULLMGenerateActionAsync* ULLMGenerateActionAsync::GenerateAction(
 	UBlackboardComponent* InBlackboard,
 	float InTemperature)
 {
-	ULLMGenerateActionAsync* Node = NewObject<ULLMGenerateActionAsync>();
+	ULLMGenerateActionAsync* Node = NewObject<ULLMGenerateActionAsync>(GetTransientPackage());
 	Node->WorldContextObject = WorldContextObject;
 	Node->APIData = InAPIData;
 	Node->UserInput = InUserInput;

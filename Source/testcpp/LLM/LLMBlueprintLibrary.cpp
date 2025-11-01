@@ -5,6 +5,9 @@
 #include "HTTP/GeminiHTTPManager.h"
 #include "BehaviorTree/BlackboardComponent.h"
 
+// Use default confidence threshold
+static constexpr float DefaultConfidenceThreshold = 0.5f;
+
 bool ULLMBlueprintLibrary::ProcessLLMResponse(
 	const FString& LLMResponseBody,
 	UBlackboardComponent* Blackboard,
@@ -55,8 +58,8 @@ bool ULLMBlueprintLibrary::ProcessLLMResponse(
 		// Continue anyway, normalization is not critical
 	}
 
-	// Step 5: Write to blackboard
-	if (!ULLMBlackboardMapper::WriteActionToBlackboard(Blackboard, Action, 0.5f))
+	// Step 5: Write to blackboard (using default threshold)
+	if (!ULLMBlackboardMapper::WriteActionToBlackboard(Blackboard, Action, DefaultConfidenceThreshold))
 	{
 		OutErrorMessage = TEXT("Failed to write action to blackboard");
 		UE_LOG(LogTemp, Error, TEXT("[LLMBlueprintLibrary] %s"), *OutErrorMessage);
