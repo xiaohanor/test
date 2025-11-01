@@ -85,6 +85,34 @@ Key requirements for the LLM:
 
 ### Using the Parser in Blueprint
 
+**Option 1: Use the Convenience Async Node (Recommended)**
+
+The simplest way to integrate LLM actions:
+
+```
+[GenerateAction Async Node]
+  - WorldContextObject: self
+  - APIData: Your Gemini API DataAsset
+  - UserInput: Text from player input
+  - Blackboard: AI Controller's Blackboard Component
+  - Temperature: 0.7 (optional)
+
+  → [OnCompleted Event]
+    - bSuccess: true/false
+    - Action: FLLMAction struct (for reference)
+    - ErrorMessage: Error description if failed
+```
+
+This node automatically:
+- Sets up the system prompt
+- Calls the LLM with JSON-only output
+- Extracts, parses, validates the JSON
+- Writes to the Blackboard if valid
+
+**Option 2: Manual Pipeline (Advanced)**
+
+If you need more control over each step:
+
 1. After receiving LLM response text, extract JSON:
    ```
    UGeminiHTTPManager::TryExtractStructuredJsonString(ResponseBody, JsonString)
@@ -109,6 +137,15 @@ Key requirements for the LLM:
    ```
    ULLMBlackboardMapper::WriteActionToBlackboard(Blackboard, Action, 0.5) → returns bool
    ```
+
+**Option 3: Use ProcessLLMResponse Helper**
+
+Single-function pipeline:
+```
+ULLMBlueprintLibrary::ProcessLLMResponse(LLMResponseBody, Blackboard, WorldContext, OutErrorMessage)
+```
+
+This combines steps 1-5 above into one function call.
 
 ### Validation Rules
 - **Confidence**: Must be ≥ 0.5 (hardcoded threshold for MVP)
@@ -182,19 +219,47 @@ Key requirements for the LLM:
 Your AI Controller needs to:
 1. Run the Behavior Tree (`Run Behavior Tree` node)
 2. Have access to the Blackboard Component
-3. Periodically or on-event call the LLM parsing pipeline
-4. Write results to Blackboard using `ULLMBlackboardMapper::WriteActionToBlackboard`
+3. Call the LLM action generation pipeline
 
-Example Blueprint flow in AI Controller:
+**Simple Integration (Recommended):**
+
+Use the `GenerateAction` async node in your AI Controller or Level Blueprint:
+
 ```
 [User Input Event] 
-  → [GenerateText Async] with SystemPrompt
+  → [GenerateAction Async]
+      - WorldContextObject: self
+      - APIData: Your Gemini DataAsset
+      - UserInput: Player's text input
+      - Blackboard: AI Controller's Blackboard Component
     → [OnCompleted]
-      → [TryExtractStructuredJsonString]
-        → [ParseAction]
-          → [ValidateAction]
-            → [if valid] → [WriteActionToBlackboard]
+        → [Branch on bSuccess]
+          → True: Action written to Blackboard, BT will execute
+          → False: Log ErrorMessage
 ```
+
+**Manual Integration:**
+
+If you prefer manual control:
+
+```
+[User Input Event] 
+  → [GenerateText Async] with SystemPrompt from GetLLMActionSystemPrompt
+    → [OnCompleted]
+      → [ProcessLLMResponse]
+        - LLMResponseBody: The response from GenerateText
+        - Blackboard: AI Controller's Blackboard Component
+        - WorldContext: self
+        → [Branch on success]
+```
+
+**Periodic/Event-Driven Execution:**
+
+You can trigger action generation:
+- On player button press
+- On timer (e.g., every 5 seconds)
+- On gameplay events (e.g., player enters trigger volume)
+- Via UI widget text input
 
 ## Testing End-to-End
 
@@ -315,6 +380,21 @@ Enable verbose logging in Project Settings → Engine → General → Log Catego
 ## API Reference
 
 ### Blueprint-Callable Functions
+
+**ULLMBlueprintLibrary** (Convenience Helpers):
+- `ProcessLLMResponse(LLMResponseBody, Blackboard, WorldContext, OutErrorMessage)` → bool
+  - Complete pipeline: extract JSON, parse, validate, write to blackboard
+- `GetLLMActionSystemPrompt()` → FString
+  - Returns the recommended system prompt for action generation
+- `GetIntentAsString(Action)` → FString
+  - Convert action intent enum to string
+- `IsActionValid(Action, OutErrorMessage)` → bool
+  - Check if action is valid
+
+**ULLMGenerateActionAsync** (High-Level Async Node):
+- `GenerateAction(WorldContext, APIData, UserInput, Blackboard, Temperature)` → Async Action
+  - OnCompleted event: (bSuccess, Action, ErrorMessage)
+  - Complete end-to-end pipeline in one async node
 
 **ULLMActionParser**:
 - `ParseAction(JsonText, OutAction)` → bool
