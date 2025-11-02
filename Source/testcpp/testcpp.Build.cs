@@ -28,6 +28,9 @@ public class testcpp : ModuleRules
 
 		PublicIncludePaths.AddRange(new string[] {
 			"testcpp",
+			"testcpp/HTTP",
+			"testcpp/LLM",
+			"testcpp/AI",
 			"testcpp/Variant_Platforming",
 			"testcpp/Variant_Platforming/Animation",
 			"testcpp/Variant_Combat",

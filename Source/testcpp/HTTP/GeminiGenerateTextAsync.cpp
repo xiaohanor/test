@@ -17,18 +17,21 @@ void UGeminiGenerateTextAsync::Activate()
 {
 	if (!WorldContextObject)
 	{
+		UE_LOG(LogTemp, Error, TEXT("[GeminiGenerateTextAsync] No WorldContextObject provided"));
 		OnCompleted.Broadcast(false, TEXT(""));
 		return;
 	}
 	UGameInstance* GI = UGameplayStatics::GetGameInstance(WorldContextObject);
 	if (!GI)
 	{
+		UE_LOG(LogTemp, Error, TEXT("[GeminiGenerateTextAsync] Failed to get GameInstance"));
 		OnCompleted.Broadcast(false, TEXT(""));
 		return;
 	}
 	UGeminiHTTPManager* Manager = GI->GetSubsystem<UGeminiHTTPManager>();
 	if (!Manager)
 	{
+		UE_LOG(LogTemp, Error, TEXT("[GeminiGenerateTextAsync] Failed to get GeminiHTTPManager subsystem"));
 		OnCompleted.Broadcast(false, TEXT(""));
 		return;
 	}
@@ -43,16 +46,19 @@ void UGeminiGenerateTextAsync::InternalJsonCallback(bool bSuccess, const FString
 {
 	if (!bSuccess)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiGenerateTextAsync] Request failed"));
 		OnCompleted.Broadcast(false, TEXT(""));
 		return;
 	}
 	FString Text;
 	if (UGeminiHTTPManager::TryExtractTextFromResponse(JsonResponse, Text))
 	{
+		UE_LOG(LogTemp, Log, TEXT("[GeminiGenerateTextAsync] Successfully extracted text, length: %d"), Text.Len());
 		OnCompleted.Broadcast(true, Text);
 	}
 	else
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[GeminiGenerateTextAsync] Failed to extract text from response"));
 		OnCompleted.Broadcast(false, TEXT(""));
 	}
 }
