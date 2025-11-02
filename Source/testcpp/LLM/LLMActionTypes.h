@@ -58,6 +58,31 @@ struct FLLMLocation
 };
 
 /**
+ * Montage parameters for PlayMontage intent
+ */
+USTRUCT(BlueprintType)
+struct FLLMMontage
+{
+	GENERATED_BODY()
+
+	// Montage logical name to look up in task mapping
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	FString Name;
+
+	// Optional section name to jump to
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	FString Section;
+
+	// Play rate, default 1.0
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	float PlayRate = 1.0f;
+
+	// Whether to loop (task may implement via section looping)
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	bool bLoop = false;
+};
+
+/**
  * Complete LLM action structure
  * Represents a parsed and validated action from LLM output
  */
@@ -82,25 +107,13 @@ struct FLLMAction
 	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
 	FString Speak;
 
-	// Montage name for PlayMontage actions (optional)
-	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
-	FString MontageName;
-
-	// Montage section to start from (optional)
-	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
-	FString MontageSection;
-
-	// Play rate for the montage (default 1.0)
-	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
-	float MontagePlayRate = 1.0f;
-
-	// Whether to loop the montage (default false)
-	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
-	bool bMontageLoop = false;
-
 	// Optional additional parameters as JSON string
 	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
 	FString Params;
+
+	// Optional montage parameters for PlayMontage intent
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	FLLMMontage Montage;
 
 	// Confidence score 0-1, actions below threshold should not execute
 	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")

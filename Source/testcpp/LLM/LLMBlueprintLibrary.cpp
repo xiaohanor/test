@@ -77,6 +77,7 @@ FString ULLMBlueprintLibrary::GetIntentAsString(const FLLMAction& Action)
 	case ELLMIntent::MoveTo: return TEXT("MoveTo");
 	case ELLMIntent::Interact: return TEXT("Interact");
 	case ELLMIntent::Speak: return TEXT("Speak");
+	case ELLMIntent::PlayMontage: return TEXT("PlayMontage");
 	case ELLMIntent::Idle: return TEXT("Idle");
 	default: return TEXT("Unknown");
 	}

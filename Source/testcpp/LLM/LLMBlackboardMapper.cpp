@@ -95,21 +95,15 @@ bool ULLMBlackboardMapper::WriteActionToBlackboard(UBlackboardComponent* Blackbo
 	}
 	else if (Action.Intent == ELLMIntent::PlayMontage)
 	{
-		if (!Action.MontageName.IsEmpty())
-		{
-			Blackboard->SetValueAsString(KEY_MontageName, Action.MontageName);
-			UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontageName: %s"), *Action.MontageName);
-		}
-		if (!Action.MontageSection.IsEmpty())
-		{
-			Blackboard->SetValueAsString(KEY_MontageSection, Action.MontageSection);
-			UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontageSection: %s"), *Action.MontageSection);
-		}
-		Blackboard->SetValueAsFloat(KEY_MontagePlayRate, Action.MontagePlayRate);
-		UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontagePlayRate: %.2f"), Action.MontagePlayRate);
-		
-		Blackboard->SetValueAsBool(KEY_MontageLoop, Action.bMontageLoop);
-		UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontageLoop: %s"), Action.bMontageLoop ? TEXT("true") : TEXT("false"));
+		Blackboard->SetValueAsString(KEY_MontageName, Action.Montage.Name);
+		Blackboard->SetValueAsString(KEY_MontageSection, Action.Montage.Section);
+		Blackboard->SetValueAsFloat(KEY_MontagePlayRate, Action.Montage.PlayRate);
+		Blackboard->SetValueAsBool(KEY_MontageLoop, Action.Montage.bLoop);
+		UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set Montage: Name=%s, Section=%s, Rate=%.2f, Loop=%s"),
+			*Action.Montage.Name,
+			Action.Montage.Section.IsEmpty() ? TEXT("None") : *Action.Montage.Section,
+			Action.Montage.PlayRate,
+			Action.Montage.bLoop ? TEXT("Yes") : TEXT("No"));
 	}
 
 	return true;
@@ -129,6 +123,7 @@ void ULLMBlackboardMapper::ClearLLMKeys(UBlackboardComponent* Blackboard)
 	Blackboard->ClearValue(KEY_TargetType);
 	Blackboard->ClearValue(KEY_SpeakText);
 	Blackboard->ClearValue(KEY_Confidence);
+	// Clear montage-related keys if they exist
 	Blackboard->ClearValue(KEY_MontageName);
 	Blackboard->ClearValue(KEY_MontageSection);
 	Blackboard->ClearValue(KEY_MontagePlayRate);
@@ -146,9 +141,9 @@ FString ULLMBlackboardMapper::GetRequiredBlackboardKeysDescription()
 		"5. TargetType (String) - Target type (e.g., 'NPC', 'Door')\n"
 		"6. SpeakText (String) - Text to speak for Speak actions\n"
 		"7. Confidence (Float) - Action confidence score (0.0-1.0)\n"
-		"8. MontageName (String) - Animation montage name for PlayMontage actions\n"
-		"9. MontageSection (String) - Montage section to start from (optional)\n"
-		"10. MontagePlayRate (Float) - Playback rate for montage (default 1.0)\n"
-		"11. MontageLoop (Bool) - Whether to loop the montage (default false)\n"
+		"8. MontageName (String) - Montage logical name to play (for PlayMontage)\n"
+		"9. MontageSection (String) - Optional section name (for PlayMontage)\n"
+		"10. MontagePlayRate (Float) - Play rate (for PlayMontage)\n"
+		"11. MontageLoop (Bool) - Loop flag (for PlayMontage)\n"
 	);
 }

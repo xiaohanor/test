@@ -72,20 +72,22 @@ bool ULLMActionParser::ParseAction(const FString& JsonText, FLLMAction& OutActio
 	// Parse speak (optional)
 	JsonObj->TryGetStringField(TEXT("speak"), OutAction.Speak);
 
-	// Parse montage fields (optional, for PlayMontage intent)
-	JsonObj->TryGetStringField(TEXT("montageName"), OutAction.MontageName);
-	JsonObj->TryGetStringField(TEXT("montageSection"), OutAction.MontageSection);
-	
-	double PlayRate = 1.0;
-	if (JsonObj->TryGetNumberField(TEXT("montagePlayRate"), PlayRate))
+	// Parse montage (optional)
+	const TSharedPtr<FJsonObject>* MontageObj;
+	if (JsonObj->TryGetObjectField(TEXT("montage"), MontageObj))
 	{
-		OutAction.MontagePlayRate = FMath::Clamp(static_cast<float>(PlayRate), 0.1f, 5.0f);
-	}
-	
-	bool bLoop = false;
-	if (JsonObj->TryGetBoolField(TEXT("montageLoop"), bLoop))
-	{
-		OutAction.bMontageLoop = bLoop;
+		(*MontageObj)->TryGetStringField(TEXT("name"), OutAction.Montage.Name);
+		(*MontageObj)->TryGetStringField(TEXT("section"), OutAction.Montage.Section);
+		double Rate = 1.0;
+		if ((*MontageObj)->TryGetNumberField(TEXT("playRate"), Rate))
+		{
+			OutAction.Montage.PlayRate = FMath::Clamp(static_cast<float>(Rate), 0.1f, 5.0f);
+		}
+		bool bLoop = false;
+		if ((*MontageObj)->TryGetBoolField(TEXT("loop"), bLoop))
+		{
+			OutAction.Montage.bLoop = bLoop;
+		}
 	}
 
 	// Parse params (optional, keep as JSON string)
@@ -96,7 +98,8 @@ bool ULLMActionParser::ParseAction(const FString& JsonText, FLLMAction& OutActio
 		TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&ParamsStr);
 		if (FJsonSerializer::Serialize((*ParamsObj).ToSharedRef(), Writer))
 		{
-			OutAction.Params = ParamsStr;
+			// Optional: store ParamsStr if needed by game-specific logic
+			UE_LOG(LogTemp, Verbose, TEXT("[LLMActionParser] Parsed params JSON (len=%d)"), ParamsStr.Len());
 		}
 	}
 
@@ -191,17 +194,15 @@ bool ULLMActionParser::ValidateAction(const FLLMAction& Action, FString& OutErro
 	// Validate PlayMontage
 	if (Action.Intent == ELLMIntent::PlayMontage)
 	{
-		if (Action.MontageName.IsEmpty())
+		if (Action.Montage.Name.IsEmpty())
 		{
-			OutErrorMessage = TEXT("PlayMontage requires non-empty montageName");
+			OutErrorMessage = TEXT("PlayMontage requires montage.name");
 			UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
 			return false;
 		}
-		// Validate play rate is within reasonable bounds
-		if (Action.MontagePlayRate < 0.1f || Action.MontagePlayRate > 5.0f)
+		if (Action.Montage.PlayRate <= 0.0f || Action.Montage.PlayRate > 5.0f)
 		{
-			OutErrorMessage = FString::Printf(TEXT("PlayMontage play rate %.2f out of valid range [0.1, 5.0]"), 
-				Action.MontagePlayRate);
+			OutErrorMessage = TEXT("PlayMontage playRate must be in (0, 5.0]");
 			UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
 			return false;
 		}
@@ -219,11 +220,8 @@ bool ULLMActionParser::NormalizeAction(FLLMAction& Action, UObject* WorldContext
 	// If using named navigation point, try to resolve it to coordinates
 	if (Action.Intent == ELLMIntent::MoveTo && !Action.Location.bUseCoordinates)
 	{
-		// For MVP, we'll just log that named points need to be resolved by game-specific logic
-		// In a real implementation, you'd query a navigation point registry here
 		UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Named navigation point '%s' requires game-specific resolution"), 
 			*Action.Location.NavPointName);
-		// For now, leave it as-is and let the BT handle it
 	}
 
 	// Apply any default values
@@ -244,17 +242,14 @@ FString ULLMActionParser::GetRecommendedSystemPrompt()
 		"- MoveTo: Move character to a location\n"
 		"- Interact: Interact with an object\n"
 		"- Speak: Make character speak\n"
-		"- PlayMontage: Play an animation montage\n\n"
+		"- PlayMontage: Play an animation montage by name\n\n"
 		"JSON schema:\n"
 		"{\n"
 		"  \"intent\": \"MoveTo\" | \"Interact\" | \"Speak\" | \"PlayMontage\",\n"
 		"  \"target\": {\"id\": \"string\", \"type\": \"string\"} (optional, for Interact),\n"
 		"  \"location\": {\"x\": 0, \"y\": 0, \"z\": 0} | \"NavPointName\" (for MoveTo),\n"
 		"  \"speak\": \"text to say\" (for Speak),\n"
-		"  \"montageName\": \"animation montage name\" (for PlayMontage, required),\n"
-		"  \"montageSection\": \"section name\" (for PlayMontage, optional),\n"
-		"  \"montagePlayRate\": 1.0 (for PlayMontage, optional, range 0.1-5.0),\n"
-		"  \"montageLoop\": false (for PlayMontage, optional),\n"
+		"  \"montage\": { \"name\": \"string\", \"section\": \"string?\", \"playRate\": 1.0, \"loop\": false } (for PlayMontage),\n"
 		"  \"params\": {} (optional),\n"
 		"  \"confidence\": 0.0-1.0 (required)\n"
 		"}\n\n"
@@ -265,10 +260,8 @@ FString ULLMActionParser::GetRecommendedSystemPrompt()
 		"{\"intent\":\"Interact\",\"target\":{\"type\":\"Guard\"},\"confidence\":0.85}\n\n"
 		"User: \"Say hello\"\n"
 		"{\"intent\":\"Speak\",\"speak\":\"Hello\",\"confidence\":0.95}\n\n"
-		"User: \"Wave at the player\"\n"
-		"{\"intent\":\"PlayMontage\",\"montageName\":\"Wave\",\"confidence\":0.9}\n\n"
-		"User: \"Attack with sword\"\n"
-		"{\"intent\":\"PlayMontage\",\"montageName\":\"SwordAttack\",\"montageSection\":\"Combo1\",\"montagePlayRate\":1.2,\"confidence\":0.95}\n\n"
+		"User: \"Do a wave animation\"\n"
+		"{\"intent\":\"PlayMontage\",\"montage\":{\"name\":\"Wave\",\"playRate\":1.0},\"confidence\":0.9}\n\n"
 		"Output ONLY valid JSON. No markdown, no explanation."
 	);
 }

@@ -20,6 +20,10 @@ class UBlackboardComponent;
  * - TargetType (String): Target type
  * - SpeakText (String): Text to speak
  * - Confidence (Float): Action confidence
+ * - MontageName (String): Montage logical name for PlayMontage
+ * - MontageSection (String): Optional section name
+ * - MontagePlayRate (Float): Play rate
+ * - MontageLoop (Bool): Loop flag
  */
 UCLASS(BlueprintType)
 class TESTCPP_API ULLMBlackboardMapper : public UObject

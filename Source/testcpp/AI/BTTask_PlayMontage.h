@@ -5,11 +5,28 @@
 #include "BehaviorTree/BTTaskNode.h"
 #include "BTTask_PlayMontage.generated.h"
 
+class UAnimMontage;
+
 /**
  * Behavior Tree task that plays an animation montage on the AI character
  * Reads MontageName, MontageSection, MontagePlayRate, and MontageLoop from Blackboard
  * Can play any animation montage configured in the project
  */
+
+USTRUCT(BlueprintType)
+struct FNamedMontage
+{
+	GENERATED_BODY()
+
+	// Logical name to be matched from LLM output (case-insensitive)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Montage")
+	FString Name;
+
+	// Montage asset to play when name matches
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Montage")
+	TSoftObjectPtr<UAnimMontage> Montage;
+};
+
 UCLASS()
 class TESTCPP_API UBTTask_PlayMontage : public UBTTaskNode
 {
@@ -41,4 +58,12 @@ protected:
 	// Whether to wait for the montage to finish before completing the task
 	UPROPERTY(EditAnywhere, Category = "Montage")
 	bool bWaitForFinish = false;
+
+	// Whether to stop the montage if the task aborts
+	UPROPERTY(EditAnywhere, Category = "Montage")
+	bool bStopOnAbort = true;
+
+	// Designer-configurable mapping from montage names to assets
+	UPROPERTY(EditAnywhere, Category = "Montage")
+	TArray<FNamedMontage> MontageMap;
 };

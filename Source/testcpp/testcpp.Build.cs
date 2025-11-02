@@ -31,19 +31,6 @@ public class testcpp : ModuleRules
 			"testcpp/HTTP",
 			"testcpp/LLM",
 			"testcpp/AI",
-			"testcpp/Variant_Platforming",
-			"testcpp/Variant_Platforming/Animation",
-			"testcpp/Variant_Combat",
-			"testcpp/Variant_Combat/AI",
-			"testcpp/Variant_Combat/Animation",
-			"testcpp/Variant_Combat/Gameplay",
-			"testcpp/Variant_Combat/Interfaces",
-			"testcpp/Variant_Combat/UI",
-			"testcpp/Variant_SideScrolling",
-			"testcpp/Variant_SideScrolling/AI",
-			"testcpp/Variant_SideScrolling/Gameplay",
-			"testcpp/Variant_SideScrolling/Interfaces",
-			"testcpp/Variant_SideScrolling/UI"
 		});
 
 		// Uncomment if you are using Slate UI

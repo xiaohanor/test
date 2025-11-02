@@ -48,83 +48,84 @@ EBTNodeResult::Type UBTTask_PlayMontage::ExecuteTask(UBehaviorTreeComponent& Own
 		return EBTNodeResult::Failed;
 	}
 
-	// Get montage name from blackboard
+	// Get montage name and params from blackboard
 	FString MontageName = BlackboardComp->GetValueAsString(MontageNameKey.SelectedKeyName);
 	if (MontageName.IsEmpty())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[BTTask_PlayMontage] MontageName is empty"));
 		return EBTNodeResult::Failed;
 	}
-
-	// For MVP, we'll use the montage name directly as a path hint
-	// In production, you'd load montages via asset registry or maintain a montage mapping
-	// For now, we'll just log and indicate success
-	// The actual montage loading would need to be done via asset references
-	
-	// Get optional parameters
 	FString SectionName = BlackboardComp->GetValueAsString(MontageSectionKey.SelectedKeyName);
 	float PlayRate = BlackboardComp->GetValueAsFloat(MontagePlayRateKey.SelectedKeyName);
-	// Parser has already validated and clamped PlayRate to [0.1, 5.0], trust it
+	if (PlayRate <= 0.f) { PlayRate = 1.f; }
 	bool bLoop = BlackboardComp->GetValueAsBool(MontageLoopKey.SelectedKeyName);
 
-	// MVP implementation: Log the montage play request
-	// In a full implementation, you would:
-	// 1. Load the montage asset by name or path
-	// 2. Call AnimInstance->Montage_Play(Montage, PlayRate)
-	// 3. If SectionName is set, call AnimInstance->Montage_JumpToSection(SectionName)
-	// 4. If bLoop, set up montage looping
-	// 5. If bWaitForFinish, bind to OnMontageEnded and return InProgress, complete later
-	
+	// Resolve montage from mapping (case-insensitive)
+	UAnimMontage* MontageAsset = nullptr;
+	for (const FNamedMontage& Entry : MontageMap)
+	{
+		if (!Entry.Montage.IsNull() && Entry.Name.Equals(MontageName, ESearchCase::IgnoreCase))
+		{
+			MontageAsset = Entry.Montage.LoadSynchronous();
+			break;
+		}
+	}
+
+	if (!MontageAsset)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[BTTask_PlayMontage] No montage asset mapped for name: %s"), *MontageName);
+		return EBTNodeResult::Failed;
+	}
+
+	// Play montage
+	float PlayedLen = AnimInstance->Montage_Play(MontageAsset, PlayRate);
+	if (PlayedLen <= 0.f)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[BTTask_PlayMontage] Montage_Play failed for: %s"), *MontageAsset->GetName());
+		return EBTNodeResult::Failed;
+	}
+
+	if (!SectionName.IsEmpty())
+	{
+		AnimInstance->Montage_JumpToSection(FName(*SectionName), MontageAsset);
+	}
+
+	// Basic loop support: if requested, set next section to itself when possible
+	if (bLoop)
+	{
+		// This is a best-effort approach; for complex montages, designers should set up looping in asset
+		// Try to set the first section to loop to itself
+		if (MontageAsset->CompositeSections.Num() > 0)
+		{
+			FName FirstSection = MontageAsset->CompositeSections[0].SectionName;
+			AnimInstance->Montage_SetNextSection(FirstSection, FirstSection, MontageAsset);
+		}
+	}
+
 	FString CharacterName = Character->GetName();
 	UE_LOG(LogTemp, Log, TEXT("[BTTask_PlayMontage] %s playing montage: %s (Section: %s, Rate: %.2f, Loop: %s)"), 
 		*CharacterName, *MontageName, 
 		SectionName.IsEmpty() ? TEXT("None") : *SectionName,
 		PlayRate,
 		bLoop ? TEXT("Yes") : TEXT("No"));
-	
-	// For MVP, display on-screen debug message as visual feedback
+
 	if (GEngine)
 	{
 		FString DisplayText = FString::Printf(TEXT("%s: Playing montage '%s'"), *CharacterName, *MontageName);
-		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Green, DisplayText);
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, DisplayText);
 	}
 
-	// TODO: Production implementation would be:
-	// FString MontagePath = FString::Printf(TEXT("/Game/Animations/%s.%s"), *MontageName, *MontageName);
-	// UAnimMontage* Montage = LoadObject<UAnimMontage>(nullptr, *MontagePath);
-	// if (Montage)
-	// {
-	//     float Duration = AnimInstance->Montage_Play(Montage, PlayRate);
-	//     if (!SectionName.IsEmpty())
-	//     {
-	//         AnimInstance->Montage_JumpToSection(FName(*SectionName), Montage);
-	//     }
-	//     if (bLoop)
-	//     {
-	//         AnimInstance->Montage_SetNextSection(FName("Default"), FName("Default"), Montage);
-	//     }
-	//     if (bWaitForFinish)
-	//     {
-	//         // Bind to OnMontageEnded and return InProgress
-	//         return EBTNodeResult::InProgress;
-	//     }
-	//     return EBTNodeResult::Succeeded;
-	// }
-	// else
-	// {
-	//     UE_LOG(LogTemp, Error, TEXT("[BTTask_PlayMontage] Failed to load montage: %s"), *MontagePath);
-	//     return EBTNodeResult::Failed;
-	// }
-
+	// MVP: Do not wait; return succeeded after start
 	return EBTNodeResult::Succeeded;
 }
 
 FString UBTTask_PlayMontage::GetStaticDescription() const
 {
-	return FString::Printf(TEXT("Play animation montage from blackboard\nMontage Key: %s\nSection Key: %s\nPlay Rate Key: %s\nLoop Key: %s\nWait for Finish: %s"),
+	return FString::Printf(TEXT("Play animation montage from blackboard\nMontage Key: %s\nSection Key: %s\nPlay Rate Key: %s\nLoop Key: %s\nWait for Finish: %s\nMapping Count: %d"),
 		*MontageNameKey.SelectedKeyName.ToString(),
 		*MontageSectionKey.SelectedKeyName.ToString(),
 		*MontagePlayRateKey.SelectedKeyName.ToString(),
 		*MontageLoopKey.SelectedKeyName.ToString(),
-		bWaitForFinish ? TEXT("Yes") : TEXT("No"));
+		bWaitForFinish ? TEXT("Yes") : TEXT("No"),
+		MontageMap.Num());
 }

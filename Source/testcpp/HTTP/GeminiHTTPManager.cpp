@@ -129,28 +129,58 @@ bool UGeminiHTTPManager::TryExtractTextFromResponse(const FString& Json, FString
 bool UGeminiHTTPManager::TryExtractStructuredJsonString(const FString& JsonResponse, FString& OutJsonString)
 {
 	OutJsonString.Empty();
-	FString Text;
-	if (!TryExtractTextFromResponse(JsonResponse, Text))
+
+	// 1) Fast path: if input already looks like a JSON object/array and parses, just return it
+	FString Trimmed = JsonResponse;
+	Trimmed.TrimStartAndEndInline();
+	if (!Trimmed.IsEmpty() && (Trimmed[0] == TEXT('{') || Trimmed[0] == TEXT('[')))
 	{
-		return false;
+		// Try parse as object
+		{
+			TSharedPtr<FJsonObject> Obj;
+			TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Trimmed);
+			if (FJsonSerializer::Deserialize(Reader, Obj) && Obj.IsValid())
+			{
+				OutJsonString = Trimmed;
+				return true;
+			}
+		}
+		// Try parse as array
+		{
+			TArray<TSharedPtr<FJsonValue>> Arr;
+			TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Trimmed);
+			if (FJsonSerializer::Deserialize(Reader, Arr))
+			{
+				OutJsonString = Trimmed;
+				return true;
+			}
+		}
 	}
+
+	// 2) Otherwise, try to extract concatenated text from a Gemini response body
+	FString Text;
+	bool bGotText = TryExtractTextFromResponse(JsonResponse, Text);
+
+	// 3) Choose a source string to scan for JSON segment: extracted text if available, otherwise the input itself
+	const FString& Source = bGotText ? Text : Trimmed;
+
 	// Heuristic: extract the first top-level JSON object/array substring
 	int32 Start = INDEX_NONE;
 	int32 End = INDEX_NONE;
-	for (int32 i = 0; i < Text.Len(); ++i)
+	for (int32 i = 0; i < Source.Len(); ++i)
 	{
-		TCHAR C = Text[i];
+		TCHAR C = Source[i];
 		if (C == TEXT('{') || C == TEXT('[')) { Start = i; break; }
 	}
 	if (Start == INDEX_NONE) return false;
 
 	// Find matching closing brace/bracket using a simple stack counter
-	TCHAR Open = Text[Start];
+	TCHAR Open = Source[Start];
 	TCHAR Close = (Open == TEXT('{')) ? TEXT('}') : TEXT(']');
 	int32 Depth = 0;
-	for (int32 i = Start; i < Text.Len(); ++i)
+	for (int32 i = Start; i < Source.Len(); ++i)
 	{
-		TCHAR C = Text[i];
+		TCHAR C = Source[i];
 		if (C == Open) Depth++;
 		else if (C == Close) {
 			Depth--;
@@ -159,8 +189,29 @@ bool UGeminiHTTPManager::TryExtractStructuredJsonString(const FString& JsonRespo
 	}
 	if (End == INDEX_NONE) return false;
 
-	OutJsonString = Text.Mid(Start, End - Start + 1);
-	return true;
+	FString Candidate = Source.Mid(Start, End - Start + 1);
+
+	// Validate that the candidate is valid JSON (object or array)
+	{
+		TSharedPtr<FJsonObject> Obj;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Candidate);
+		if (FJsonSerializer::Deserialize(Reader, Obj) && Obj.IsValid())
+		{
+			OutJsonString = Candidate;
+			return true;
+		}
+	}
+	{
+		TArray<TSharedPtr<FJsonValue>> Arr;
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(Candidate);
+		if (FJsonSerializer::Deserialize(Reader, Arr))
+		{
+			OutJsonString = Candidate;
+			return true;
+		}
+	}
+
+	return false;
 }
 
 FString UGeminiHTTPManager::BuildGenerateUrl(const FString& Model) const
