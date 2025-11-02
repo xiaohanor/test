@@ -64,10 +64,7 @@ EBTNodeResult::Type UBTTask_PlayMontage::ExecuteTask(UBehaviorTreeComponent& Own
 	// Get optional parameters
 	FString SectionName = BlackboardComp->GetValueAsString(MontageSectionKey.SelectedKeyName);
 	float PlayRate = BlackboardComp->GetValueAsFloat(MontagePlayRateKey.SelectedKeyName);
-	if (PlayRate <= 0.0f)
-	{
-		PlayRate = 1.0f; // Default
-	}
+	// Parser has already validated and clamped PlayRate to [0.1, 5.0], trust it
 	bool bLoop = BlackboardComp->GetValueAsBool(MontageLoopKey.SelectedKeyName);
 
 	// MVP implementation: Log the montage play request
