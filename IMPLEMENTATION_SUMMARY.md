@@ -26,10 +26,10 @@ Successfully implemented a complete MVP system for controlling Unreal Engine cha
 ✅ **Completed in C++**
 
 **Data Structures:**
-- `ELLMIntent` enum: MoveTo, Interact, Speak, Idle
+- `ELLMIntent` enum: MoveTo, Interact, Speak, PlayMontage, Idle
 - `FLLMTarget`: id, type
 - `FLLMLocation`: coordinates or NavPointName
-- `FLLMAction`: Complete action structure
+- `FLLMAction`: Complete action structure with montage fields (MontageName, MontageSection, MontagePlayRate, bMontageLoop)
 
 **Parser (`ULLMActionParser`):**
 - `ParseAction()`: Converts JSON to FLLMAction struct
@@ -40,7 +40,7 @@ Successfully implemented a complete MVP system for controlling Unreal Engine cha
 **Blackboard Mapper (`ULLMBlackboardMapper`):**
 - `WriteActionToBlackboard()`: Writes validated actions to Blackboard
 - `ClearLLMKeys()`: Cleanup helper
-- Defined 7 required Blackboard keys
+- Defined 11 required Blackboard keys (including montage keys)
 
 **Convenience Layer:**
 - `ULLMBlueprintLibrary`: Helper functions for Blueprint
@@ -57,6 +57,7 @@ Successfully implemented a complete MVP system for controlling Unreal Engine cha
 - MoveTo: Requires location (coordinates or NavPointName)
 - Interact: Requires target id or type
 - Speak: Requires non-empty text, max 500 characters (configurable constant)
+- PlayMontage: Requires non-empty montageName, play rate in [0.1, 5.0]
 
 **Files Added:**
 - `Source/testcpp/LLM/LLMActionTypes.h`
@@ -71,6 +72,7 @@ Successfully implemented a complete MVP system for controlling Unreal Engine cha
 **BT Tasks:**
 - `UBTTask_InteractTarget`: Interacts with target actor (logs for MVP)
 - `UBTTask_Speak`: Displays speech on screen and logs
+- `UBTTask_PlayMontage`: Plays animation montage on AI character (logs for MVP)
 
 **BT Decorators:**
 - `UBTDecorator_CheckIntent`: Branches tree based on Intent value
@@ -80,10 +82,12 @@ Successfully implemented a complete MVP system for controlling Unreal Engine cha
 - Branch 1: MoveTo → CheckIntent(MoveTo) → CheckVector(TargetLocation) → BTTask_MoveTo (built-in)
 - Branch 2: Interact → CheckIntent(Interact) → CheckObject(TargetActor) → BTTask_InteractTarget
 - Branch 3: Speak → CheckIntent(Speak) → CheckString(SpeakText) → BTTask_Speak
+- Branch 4: PlayMontage → CheckIntent(PlayMontage) → CheckString(MontageName) → BTTask_PlayMontage
 
 **Files Added:**
 - `Source/testcpp/AI/BTTask_InteractTarget.h/cpp`
 - `Source/testcpp/AI/BTTask_Speak.h/cpp`
+- `Source/testcpp/AI/BTTask_PlayMontage.h/cpp`
 - `Source/testcpp/AI/BTDecorator_CheckIntent.h/cpp`
 
 ### Documentation
@@ -140,11 +144,11 @@ The following tasks are **not code changes** and must be done in the Unreal Edit
 
 1. **Create BB_LLM Blackboard Asset**
    - In Content Browser: Right-click → AI → Blackboard
-   - Add 7 keys as documented in LLM_AI_SETUP.md
+   - Add 11 keys as documented in LLM_AI_SETUP.md (including montage keys)
 
 2. **Create BT_LLM_MVP Behavior Tree**
    - In Content Browser: Right-click → AI → Behavior Tree
-   - Build tree structure as documented
+   - Build tree structure as documented (4 branches: MoveTo, Interact, Speak, PlayMontage)
 
 3. **Set Up AI Controller**
    - Use `GenerateAction` async node to connect user input to Blackboard
@@ -154,6 +158,7 @@ The following tasks are **not code changes** and must be done in the Unreal Edit
    - MoveTo: "Go to coordinates X, Y, Z"
    - Interact: "Open the door"
    - Speak: "Say hello"
+   - PlayMontage: "Wave at the player"
 
 5. **Create UAPIData Asset**
    - Configure Gemini API key, URL, model
@@ -192,9 +197,9 @@ GenerateText Async
 ✅ JSON-only output mode
 ✅ Strict validation with confidence threshold
 ✅ Blueprint-friendly APIs
-✅ Three intent types: MoveTo, Interact, Speak
+✅ Four intent types: MoveTo, Interact, Speak, PlayMontage
 ✅ Comprehensive logging
-✅ Safety constraints (NavMesh, text length)
+✅ Safety constraints (NavMesh, text length, play rate limits)
 ✅ Automatic system prompt generation
 ✅ Proper memory management
 ✅ Security scan passed
@@ -221,7 +226,7 @@ See `LLM_AI_SETUP.md` for:
 
 ## File Summary
 
-### New Files (19 total)
+### New Files (21 total)
 - **LLM System** (10 files):
   - LLMActionTypes.h
   - LLMActionParser.h/cpp
@@ -229,9 +234,10 @@ See `LLM_AI_SETUP.md` for:
   - LLMBlueprintLibrary.h/cpp
   - LLMGenerateActionAsync.h/cpp
   
-- **AI Components** (6 files):
+- **AI Components** (8 files):
   - BTTask_InteractTarget.h/cpp
   - BTTask_Speak.h/cpp
+  - BTTask_PlayMontage.h/cpp (NEW)
   - BTDecorator_CheckIntent.h/cpp
   
 - **Documentation** (1 file):
@@ -240,9 +246,12 @@ See `LLM_AI_SETUP.md` for:
 - **Summary** (1 file):
   - IMPLEMENTATION_SUMMARY.md (this file)
 
-### Modified Files (3 total)
+### Modified Files (5 total)
 - HTTP/GeminiHTTPManager.cpp (logging)
 - HTTP/GeminiGenerateTextAsync.cpp (logging)
+- LLM/LLMActionTypes.h (added PlayMontage intent and montage fields)
+- LLM/LLMActionParser.cpp (added PlayMontage parsing, validation, system prompt)
+- LLM/LLMBlackboardMapper.h/cpp (added montage blackboard keys)
 - testcpp.Build.cs (include paths)
 
 ## Validation Checklist
@@ -250,6 +259,7 @@ See `LLM_AI_SETUP.md` for:
 - [x] M1: LLM call chain with logging
 - [x] M2: JSON parsing, validation, Blackboard mapping
 - [x] M3: BT tasks and decorators
+- [x] PlayMontage behavior added (NEW)
 - [x] Convenience async node
 - [x] Helper Blueprint library
 - [x] Comprehensive documentation
@@ -269,16 +279,25 @@ See `LLM_AI_SETUP.md` for:
 
 ✅ **M2 Acceptance:**
 - JSON contract defined and documented
-- Parser handles all intent types
+- Parser handles all intent types (including PlayMontage)
 - Validation enforces required fields, types, ranges
 - Confidence threshold check (0.5)
 - Blackboard mapper writes only validated actions
 
 ✅ **M3 Acceptance:**
 - BT structure documented
-- Three action nodes implemented
+- Four action nodes implemented (MoveTo, Interact, Speak, PlayMontage)
 - Intent decorator for branching
 - Safety constraints documented
+
+✅ **PlayMontage Feature:**
+- PlayMontage intent added to ELLMIntent enum
+- Montage fields added to FLLMAction (MontageName, MontageSection, MontagePlayRate, bMontageLoop)
+- Parser updated to parse and validate montage fields
+- Blackboard mapper updated with 4 new montage keys
+- BTTask_PlayMontage created with comprehensive logging
+- System prompt updated with PlayMontage examples and schema
+- Documentation updated with test cases and usage examples
 
 ✅ **Overall:**
 - Minimal code changes (surgical approach)
@@ -290,4 +309,4 @@ See `LLM_AI_SETUP.md` for:
 
 ## Conclusion
 
-All M1-M3 requirements have been successfully implemented in C++. The system is ready for Blueprint/Editor integration and testing. The remaining work consists only of creating Blueprint assets (Blackboard, Behavior Tree) and wiring them in the editor—no additional code changes are required.
+All M1-M3 requirements plus the PlayMontage behavior have been successfully implemented in C++. The system now supports four intent types: MoveTo, Interact, Speak, and PlayMontage. The PlayMontage feature includes complete integration from JSON parsing through validation to Behavior Tree execution, with comprehensive logging and documentation. The system is ready for Blueprint/Editor integration and testing. The remaining work consists only of creating Blueprint assets (Blackboard with 11 keys, Behavior Tree with 4 branches) and wiring them in the editor—no additional code changes are required.
