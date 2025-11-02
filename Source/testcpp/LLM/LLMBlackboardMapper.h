@@ -60,4 +60,8 @@ private:
 	static const FName KEY_TargetType;
 	static const FName KEY_SpeakText;
 	static const FName KEY_Confidence;
+	static const FName KEY_MontageName;
+	static const FName KEY_MontageSection;
+	static const FName KEY_MontagePlayRate;
+	static const FName KEY_MontageLoop;
 };

@@ -161,15 +161,19 @@ This combines steps 1-5 above into one function call.
 2. Name it `BB_LLM`
 3. Add the following keys:
 
-| Key Name        | Key Type | Description                          |
-|-----------------|----------|--------------------------------------|
-| Intent          | String   | Action intent: MoveTo/Interact/Speak |
-| TargetLocation  | Vector   | World position for MoveTo            |
-| TargetActor     | Object   | Actor reference for Interact         |
-| TargetId        | String   | Target identifier or NavPoint name   |
-| TargetType      | String   | Target type (NPC, Door, etc.)        |
-| SpeakText       | String   | Text to speak                        |
-| Confidence      | Float    | Action confidence (0.0-1.0)          |
+| Key Name        | Key Type | Description                              |
+|-----------------|----------|------------------------------------------|
+| Intent          | String   | Action intent: MoveTo/Interact/Speak/PlayMontage |
+| TargetLocation  | Vector   | World position for MoveTo                |
+| TargetActor     | Object   | Actor reference for Interact             |
+| TargetId        | String   | Target identifier or NavPoint name       |
+| TargetType      | String   | Target type (NPC, Door, etc.)            |
+| SpeakText       | String   | Text to speak                            |
+| Confidence      | Float    | Action confidence (0.0-1.0)              |
+| MontageName     | String   | Animation montage name for PlayMontage   |
+| MontageSection  | String   | Montage section to start from (optional) |
+| MontagePlayRate | Float    | Playback rate for montage (default 1.0)  |
+| MontageLoop     | Bool     | Whether to loop the montage              |
 
 ### Step 2: Create Behavior Tree (BT_LLM_MVP)
 
@@ -213,6 +217,20 @@ This combines steps 1-5 above into one function call.
 - Task: `Speak` (custom UBTTask_Speak)
   - SpeakTextKey: `SpeakText`
   - DisplayDuration: 3.0 seconds
+
+**Branch 4: PlayMontage**
+- Decorator: `Check Intent`
+  - IntentKey: `Intent`
+  - ExpectedIntent: `PlayMontage`
+- Decorator: `Blackboard Based Condition`
+  - Key: `MontageName`
+  - Key Query: Is Set
+- Task: `Play Montage` (custom UBTTask_PlayMontage)
+  - MontageNameKey: `MontageName`
+  - MontageSectionKey: `MontageSection`
+  - MontagePlayRateKey: `MontagePlayRate`
+  - MontageLoopKey: `MontageLoop`
+  - Wait for Finish: false (optional)
 
 ### Step 4: Set Up AI Controller
 
@@ -303,6 +321,32 @@ You can trigger action generation:
 - On-screen debug message appears
 - Log: "[BTTask_Speak] CharacterName says: 'Hello to everyone'"
 
+### Test Case 4: PlayMontage
+**Input**: "Wave at the player"
+**Expected LLM Output**:
+```json
+{"intent":"PlayMontage","montageName":"Wave","confidence":0.9}
+```
+**Expected Behavior**:
+- Parser succeeds
+- Validation succeeds
+- Blackboard: Intent="PlayMontage", MontageName="Wave", MontagePlayRate=1.0, MontageLoop=false
+- BT PlayMontage branch executes
+- On-screen debug message appears
+- Log: "[BTTask_PlayMontage] CharacterName playing montage: Wave (Section: None, Rate: 1.00, Loop: No)"
+
+**Input**: "Attack with sword quickly"
+**Expected LLM Output**:
+```json
+{"intent":"PlayMontage","montageName":"SwordAttack","montageSection":"Combo1","montagePlayRate":1.5,"confidence":0.95}
+```
+**Expected Behavior**:
+- Parser succeeds
+- Validation succeeds
+- Blackboard: Intent="PlayMontage", MontageName="SwordAttack", MontageSection="Combo1", MontagePlayRate=1.5
+- BT PlayMontage branch executes
+- Montage plays at 1.5x speed starting from Combo1 section
+
 ### Negative Test Cases
 
 **Low Confidence**:
@@ -318,6 +362,21 @@ You can trigger action generation:
 {"intent":"Speak","confidence":0.9}
 ```
 - Validation fails (no speak text)
+- Error logged
+- Blackboard not updated
+
+```json
+{"intent":"PlayMontage","confidence":0.9}
+```
+- Validation fails (no montageName)
+- Error logged: "PlayMontage requires non-empty montageName"
+- Blackboard not updated
+
+**Invalid Play Rate**:
+```json
+{"intent":"PlayMontage","montageName":"Wave","montagePlayRate":10.0,"confidence":0.9}
+```
+- Validation fails (play rate out of range [0.1, 5.0])
 - Error logged
 - Blackboard not updated
 
@@ -337,6 +396,7 @@ All components log to the Output Log with prefixes:
 - `[LLMBlackboardMapper]` - Blackboard writing logs
 - `[BTTask_InteractTarget]` - Interact task logs
 - `[BTTask_Speak]` - Speak task logs
+- `[BTTask_PlayMontage]` - PlayMontage task logs
 - `[BTDecorator_CheckIntent]` - Intent checking logs
 
 Enable verbose logging in Project Settings → Engine → General → Log Categories for detailed trace.
@@ -346,6 +406,7 @@ Enable verbose logging in Project Settings → Engine → General → Log Catego
 - **MoveTo**: Should check if location is in navigable area (NavMesh). Current implementation uses built-in MoveTo which respects NavMesh.
 - **Interact**: Should validate target is interactable. Current MVP logs interaction; extend with IInteractable interface.
 - **Speak**: Limited to 500 characters. Longer text fails validation.
+- **PlayMontage**: Play rate limited to [0.1, 5.0]. Montage name is required. MVP logs the montage play request; production implementation should load and play actual animation assets.
 - **Confidence**: Actions below 0.5 confidence are rejected.
 
 ## Future Extensions (Out of MVP Scope)
@@ -415,3 +476,4 @@ Enable verbose logging in Project Settings → Engine → General → Log Catego
 **UBTDecorator_CheckIntent**: Checks if Intent matches expected value
 **UBTTask_InteractTarget**: Interacts with target actor (logs for MVP)
 **UBTTask_Speak**: Displays speak text on screen and logs
+**UBTTask_PlayMontage**: Plays animation montage on AI character (logs for MVP, TODO: load and play actual assets)

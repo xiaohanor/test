@@ -6,7 +6,7 @@
 
 /**
  * Intent types supported by the LLM action system
- * Limited to MVP scope: MoveTo, Interact, Speak
+ * MVP scope: MoveTo, Interact, Speak, PlayMontage
  */
 UENUM(BlueprintType)
 enum class ELLMIntent : uint8
@@ -14,7 +14,8 @@ enum class ELLMIntent : uint8
 	Idle UMETA(DisplayName = "Idle"),
 	MoveTo UMETA(DisplayName = "Move To"),
 	Interact UMETA(DisplayName = "Interact"),
-	Speak UMETA(DisplayName = "Speak")
+	Speak UMETA(DisplayName = "Speak"),
+	PlayMontage UMETA(DisplayName = "Play Montage")
 };
 
 /**
@@ -80,6 +81,22 @@ struct FLLMAction
 	// Text to speak for Speak actions (optional)
 	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
 	FString Speak;
+
+	// Montage name for PlayMontage actions (optional)
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	FString MontageName;
+
+	// Montage section to start from (optional)
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	FString MontageSection;
+
+	// Play rate for the montage (default 1.0)
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	float MontagePlayRate = 1.0f;
+
+	// Whether to loop the montage (default false)
+	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")
+	bool bMontageLoop = false;
 
 	// Optional additional parameters as JSON string
 	UPROPERTY(BlueprintReadWrite, Category = "LLM|Action")

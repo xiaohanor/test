@@ -11,6 +11,10 @@ const FName ULLMBlackboardMapper::KEY_TargetId = FName(TEXT("TargetId"));
 const FName ULLMBlackboardMapper::KEY_TargetType = FName(TEXT("TargetType"));
 const FName ULLMBlackboardMapper::KEY_SpeakText = FName(TEXT("SpeakText"));
 const FName ULLMBlackboardMapper::KEY_Confidence = FName(TEXT("Confidence"));
+const FName ULLMBlackboardMapper::KEY_MontageName = FName(TEXT("MontageName"));
+const FName ULLMBlackboardMapper::KEY_MontageSection = FName(TEXT("MontageSection"));
+const FName ULLMBlackboardMapper::KEY_MontagePlayRate = FName(TEXT("MontagePlayRate"));
+const FName ULLMBlackboardMapper::KEY_MontageLoop = FName(TEXT("MontageLoop"));
 
 bool ULLMBlackboardMapper::WriteActionToBlackboard(UBlackboardComponent* Blackboard, const FLLMAction& Action, float ConfidenceThreshold)
 {
@@ -46,6 +50,7 @@ bool ULLMBlackboardMapper::WriteActionToBlackboard(UBlackboardComponent* Blackbo
 	case ELLMIntent::MoveTo: IntentStr = TEXT("MoveTo"); break;
 	case ELLMIntent::Interact: IntentStr = TEXT("Interact"); break;
 	case ELLMIntent::Speak: IntentStr = TEXT("Speak"); break;
+	case ELLMIntent::PlayMontage: IntentStr = TEXT("PlayMontage"); break;
 	case ELLMIntent::Idle: IntentStr = TEXT("Idle"); break;
 	default: IntentStr = TEXT("Idle"); break;
 	}
@@ -88,6 +93,24 @@ bool ULLMBlackboardMapper::WriteActionToBlackboard(UBlackboardComponent* Blackbo
 		Blackboard->SetValueAsString(KEY_SpeakText, Action.Speak);
 		UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set SpeakText: %s"), *Action.Speak);
 	}
+	else if (Action.Intent == ELLMIntent::PlayMontage)
+	{
+		if (!Action.MontageName.IsEmpty())
+		{
+			Blackboard->SetValueAsString(KEY_MontageName, Action.MontageName);
+			UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontageName: %s"), *Action.MontageName);
+		}
+		if (!Action.MontageSection.IsEmpty())
+		{
+			Blackboard->SetValueAsString(KEY_MontageSection, Action.MontageSection);
+			UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontageSection: %s"), *Action.MontageSection);
+		}
+		Blackboard->SetValueAsFloat(KEY_MontagePlayRate, Action.MontagePlayRate);
+		UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontagePlayRate: %.2f"), Action.MontagePlayRate);
+		
+		Blackboard->SetValueAsBool(KEY_MontageLoop, Action.bMontageLoop);
+		UE_LOG(LogTemp, Log, TEXT("[LLMBlackboardMapper] Set MontageLoop: %s"), Action.bMontageLoop ? TEXT("true") : TEXT("false"));
+	}
 
 	return true;
 }
@@ -106,18 +129,26 @@ void ULLMBlackboardMapper::ClearLLMKeys(UBlackboardComponent* Blackboard)
 	Blackboard->ClearValue(KEY_TargetType);
 	Blackboard->ClearValue(KEY_SpeakText);
 	Blackboard->ClearValue(KEY_Confidence);
+	Blackboard->ClearValue(KEY_MontageName);
+	Blackboard->ClearValue(KEY_MontageSection);
+	Blackboard->ClearValue(KEY_MontagePlayRate);
+	Blackboard->ClearValue(KEY_MontageLoop);
 }
 
 FString ULLMBlackboardMapper::GetRequiredBlackboardKeysDescription()
 {
 	return TEXT(
 		"Required Blackboard Keys for BB_LLM:\n\n"
-		"1. Intent (String) - The action intent: 'MoveTo', 'Interact', 'Speak', 'Idle'\n"
+		"1. Intent (String) - The action intent: 'MoveTo', 'Interact', 'Speak', 'PlayMontage', 'Idle'\n"
 		"2. TargetLocation (Vector) - World position for MoveTo actions\n"
 		"3. TargetActor (Object) - Actor reference for Interact actions\n"
 		"4. TargetId (String) - Target identifier or NavPoint name\n"
 		"5. TargetType (String) - Target type (e.g., 'NPC', 'Door')\n"
 		"6. SpeakText (String) - Text to speak for Speak actions\n"
 		"7. Confidence (Float) - Action confidence score (0.0-1.0)\n"
+		"8. MontageName (String) - Animation montage name for PlayMontage actions\n"
+		"9. MontageSection (String) - Montage section to start from (optional)\n"
+		"10. MontagePlayRate (Float) - Playback rate for montage (default 1.0)\n"
+		"11. MontageLoop (Bool) - Whether to loop the montage (default false)\n"
 	);
 }
