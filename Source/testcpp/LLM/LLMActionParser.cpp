@@ -72,6 +72,22 @@ bool ULLMActionParser::ParseAction(const FString& JsonText, FLLMAction& OutActio
 	// Parse speak (optional)
 	JsonObj->TryGetStringField(TEXT("speak"), OutAction.Speak);
 
+	// Parse montage fields (optional, for PlayMontage intent)
+	JsonObj->TryGetStringField(TEXT("montageName"), OutAction.MontageName);
+	JsonObj->TryGetStringField(TEXT("montageSection"), OutAction.MontageSection);
+	
+	double PlayRate = 1.0;
+	if (JsonObj->TryGetNumberField(TEXT("montagePlayRate"), PlayRate))
+	{
+		OutAction.MontagePlayRate = FMath::Clamp(static_cast<float>(PlayRate), 0.1f, 5.0f);
+	}
+	
+	bool bLoop = false;
+	if (JsonObj->TryGetBoolField(TEXT("montageLoop"), bLoop))
+	{
+		OutAction.bMontageLoop = bLoop;
+	}
+
 	// Parse params (optional, keep as JSON string)
 	const TSharedPtr<FJsonObject>* ParamsObj;
 	if (JsonObj->TryGetObjectField(TEXT("params"), ParamsObj))
@@ -172,6 +188,26 @@ bool ULLMActionParser::ValidateAction(const FLLMAction& Action, FString& OutErro
 		return true;
 	}
 
+	// Validate PlayMontage
+	if (Action.Intent == ELLMIntent::PlayMontage)
+	{
+		if (Action.MontageName.IsEmpty())
+		{
+			OutErrorMessage = TEXT("PlayMontage requires non-empty montageName");
+			UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
+			return false;
+		}
+		// Validate play rate is within reasonable bounds
+		if (Action.MontagePlayRate < 0.1f || Action.MontagePlayRate > 5.0f)
+		{
+			OutErrorMessage = FString::Printf(TEXT("PlayMontage play rate %.2f out of valid range [0.1, 5.0]"), 
+				Action.MontagePlayRate);
+			UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
+			return false;
+		}
+		return true;
+	}
+
 	// Unknown intent
 	OutErrorMessage = FString::Printf(TEXT("Unknown intent: %s"), *IntentToString(Action.Intent));
 	UE_LOG(LogTemp, Warning, TEXT("[LLMActionParser] Validation failed: %s"), *OutErrorMessage);
@@ -207,13 +243,18 @@ FString ULLMActionParser::GetRecommendedSystemPrompt()
 		"Supported intents:\n"
 		"- MoveTo: Move character to a location\n"
 		"- Interact: Interact with an object\n"
-		"- Speak: Make character speak\n\n"
+		"- Speak: Make character speak\n"
+		"- PlayMontage: Play an animation montage\n\n"
 		"JSON schema:\n"
 		"{\n"
-		"  \"intent\": \"MoveTo\" | \"Interact\" | \"Speak\",\n"
+		"  \"intent\": \"MoveTo\" | \"Interact\" | \"Speak\" | \"PlayMontage\",\n"
 		"  \"target\": {\"id\": \"string\", \"type\": \"string\"} (optional, for Interact),\n"
 		"  \"location\": {\"x\": 0, \"y\": 0, \"z\": 0} | \"NavPointName\" (for MoveTo),\n"
 		"  \"speak\": \"text to say\" (for Speak),\n"
+		"  \"montageName\": \"animation montage name\" (for PlayMontage, required),\n"
+		"  \"montageSection\": \"section name\" (for PlayMontage, optional),\n"
+		"  \"montagePlayRate\": 1.0 (for PlayMontage, optional, range 0.1-5.0),\n"
+		"  \"montageLoop\": false (for PlayMontage, optional),\n"
 		"  \"params\": {} (optional),\n"
 		"  \"confidence\": 0.0-1.0 (required)\n"
 		"}\n\n"
@@ -224,6 +265,10 @@ FString ULLMActionParser::GetRecommendedSystemPrompt()
 		"{\"intent\":\"Interact\",\"target\":{\"type\":\"Guard\"},\"confidence\":0.85}\n\n"
 		"User: \"Say hello\"\n"
 		"{\"intent\":\"Speak\",\"speak\":\"Hello\",\"confidence\":0.95}\n\n"
+		"User: \"Wave at the player\"\n"
+		"{\"intent\":\"PlayMontage\",\"montageName\":\"Wave\",\"confidence\":0.9}\n\n"
+		"User: \"Attack with sword\"\n"
+		"{\"intent\":\"PlayMontage\",\"montageName\":\"SwordAttack\",\"montageSection\":\"Combo1\",\"montagePlayRate\":1.2,\"confidence\":0.95}\n\n"
 		"Output ONLY valid JSON. No markdown, no explanation."
 	);
 }
@@ -242,6 +287,10 @@ ELLMIntent ULLMActionParser::ParseIntent(const FString& IntentStr)
 	{
 		return ELLMIntent::Speak;
 	}
+	if (IntentStr.Equals(TEXT("PlayMontage"), ESearchCase::IgnoreCase))
+	{
+		return ELLMIntent::PlayMontage;
+	}
 	if (IntentStr.Equals(TEXT("Idle"), ESearchCase::IgnoreCase))
 	{
 		return ELLMIntent::Idle;
@@ -258,6 +307,7 @@ FString ULLMActionParser::IntentToString(ELLMIntent Intent)
 	case ELLMIntent::MoveTo: return TEXT("MoveTo");
 	case ELLMIntent::Interact: return TEXT("Interact");
 	case ELLMIntent::Speak: return TEXT("Speak");
+	case ELLMIntent::PlayMontage: return TEXT("PlayMontage");
 	case ELLMIntent::Idle: return TEXT("Idle");
 	default: return TEXT("Unknown");
 	}
